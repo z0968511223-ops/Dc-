@@ -1,10 +1,12 @@
 import discord
 from discord.ext import tasks, commands
 from datetime import datetime, timedelta
+from zoneinfo import ZoneInfo
 import os
 
 TOKEN = os.getenv("TOKEN")
 CHANNEL_ID = int(os.getenv("CHANNEL_ID", "0"))
+TZ = ZoneInfo("Asia/Taipei")
 
 SCHEDULE = [
     {"name": "野外 Boss 群組1", "times": ["00:15", "09:15", "12:15", "21:15"], "days": None, "category": "大世界"},
@@ -19,7 +21,7 @@ SCHEDULE = [
     {"name": "大氾濫", "times": ["20:00"], "days": None, "category": "大世界"},
     {"name": "激戰", "times": ["21:00"], "days": [1, 4, 6], "category": "大世界"},
     {"name": "次元BOSS", "times": ["21:30"], "days": None, "category": "大世界"},
-    {"name": "神石戰", "times": ["19:30"], "days": [6], "base_date": datetime(2026, 11, 1), "every_n_days": 14, "category": "公會"},
+    {"name": "神石戰", "times": ["19:30"], "days": [6], "base_date": datetime(2026, 11, 1, tzinfo=TZ), "every_n_days": 14, "category": "公會"},
     {"name": "公會活動集合（複製體/遠征/競技場/證明）", "times": ["22:20"], "days": [6], "category": "公會"},
 ]
 
@@ -28,13 +30,16 @@ bot = commands.Bot(command_prefix="!", intents=intents)
 notified = set()
 dynamic_timers = {}
 
+def now_tw():
+    return datetime.now(TZ)
+
 def is_event_on_date(event, target_date):
     weekday = target_date.weekday()
     days = event.get("days")
     if days is not None and weekday not in days:
         return False
     if "every_n_days" in event:
-        base = event.get("base_date", datetime(2026, 9, 16))
+        base = event.get("base_date", datetime(2026, 9, 16, tzinfo=TZ))
         days_diff = (target_date.date() - base.date()).days
         if days_diff < 0 or (days_diff % event["every_n_days"]) != 0:
             return False
@@ -45,7 +50,7 @@ def should_notify(event, now, minutes_before):
         return False
     current_time = now.strftime("%H:%M")
     for t in event["times"]:
-        target = datetime.strptime(t, "%H:%M").replace(year=now.year, month=now.month, day=now.day)
+        target = datetime.strptime(t, "%H:%M").replace(year=now.year, month=now.month, day=now.day, tzinfo=TZ)
         notify_time = target - timedelta(minutes=minutes_before)
         if notify_time.strftime("%H:%M") == current_time:
             key = f"{event['name']}_{minutes_before}_{current_time}_{now.date()}"
@@ -56,16 +61,14 @@ def should_notify(event, now, minutes_before):
 
 @tasks.loop(minutes=1)
 async def check_schedule():
-    now = datetime.now()
+    now = now_tw()
     channel = bot.get_channel(CHANNEL_ID)
     if not channel:
         return
 
     for event in SCHEDULE:
-        # 倒數 10 分鐘
         if should_notify(event, now, 10):
             await channel.send(f"@everyone **{event['name']}** 即將開始！（還有 10 分鐘）")
-        # 倒數 5 分鐘
         if should_notify(event, now, 5):
             await channel.send(f"@everyone **{event['name']}** 即將開始！（還有 5 分鐘）")
 
@@ -102,12 +105,12 @@ def build_day_message(target_date, title_prefix):
 
 @bot.tree.command(name="今日", description="查看今天有哪些活動")
 async def today(interaction: discord.Interaction):
-    msg = build_day_message(datetime.now(), "今日")
+    msg = build_day_message(now_tw(), "今日")
     await interaction.response.send_message(msg)
 
 @bot.tree.command(name="明日", description="查看明天有哪些活動")
 async def tomorrow(interaction: discord.Interaction):
-    tomorrow_date = datetime.now() + timedelta(days=1)
+    tomorrow_date = now_tw() + timedelta(days=1)
     msg = build_day_message(tomorrow_date, "明日")
     await interaction.response.send_message(msg)
 
@@ -116,7 +119,7 @@ async def kill(interaction: discord.Interaction, 名稱: str, 分鐘: int):
     if 分鐘 <= 0:
         await interaction.response.send_message("分鐘數必須大於 0", ephemeral=True)
         return
-    next_time = datetime.now() + timedelta(minutes=分鐘)
+    next_time = now_tw() + timedelta(minutes=分鐘)
     dynamic_timers[名稱.strip()] = next_time
     hours, mins = divmod(分鐘, 60)
     time_str = f"{hours}小時{mins}分鐘" if hours else f"{mins}分鐘"
@@ -128,7 +131,7 @@ async def status(interaction: discord.Interaction):
         await interaction.response.send_message("目前沒有進行中的動態倒數。")
         return
     lines = []
-    now = datetime.now()
+    now = now_tw()
     for name, next_time in dynamic_timers.items():
         remaining = next_time - now
         total_mins = int(remaining.total_seconds() // 60)
@@ -140,20 +143,3 @@ async def status(interaction: discord.Interaction):
 async def cancel(interaction: discord.Interaction, 名稱: str):
     name = 名稱.strip()
     if name in dynamic_timers:
-        dynamic_timers.pop(name)
-        await interaction.response.send_message(f"已取消 **{name}** 的倒數。")
-    else:
-        await interaction.response.send_message(f"找不到 **{name}** 的倒數。", ephemeral=True)
-
-@bot.event
-async def on_ready():
-    print(f"機器人已上線：{bot.user}")
-    try:
-        synced = await bot.tree.sync()
-        print(f"已同步 {len(synced)} 個斜線指令")
-    except Exception as e:
-        print(e)
-    if not check_schedule.is_running():
-        check_schedule.start()
-
-bot.run(TOKEN)
