@@ -5,7 +5,6 @@ import os
 
 TOKEN = os.getenv("TOKEN")
 CHANNEL_ID = int(os.getenv("CHANNEL_ID", "0"))
-ADVANCE_MINUTES = 5
 
 SCHEDULE = [
     {"name": "野外 Boss 群組1", "times": ["00:15", "09:15", "12:15", "21:15"], "days": None, "category": "大世界"},
@@ -41,15 +40,15 @@ def is_event_on_date(event, target_date):
             return False
     return True
 
-def should_notify(event, now):
+def should_notify(event, now, minutes_before):
     if not is_event_on_date(event, now):
         return False
     current_time = now.strftime("%H:%M")
     for t in event["times"]:
         target = datetime.strptime(t, "%H:%M").replace(year=now.year, month=now.month, day=now.day)
-        notify_time = target - timedelta(minutes=ADVANCE_MINUTES)
+        notify_time = target - timedelta(minutes=minutes_before)
         if notify_time.strftime("%H:%M") == current_time:
-            key = f"{event['name']}_{current_time}_{now.date()}"
+            key = f"{event['name']}_{minutes_before}_{current_time}_{now.date()}"
             if key not in notified:
                 notified.add(key)
                 return True
@@ -61,17 +60,25 @@ async def check_schedule():
     channel = bot.get_channel(CHANNEL_ID)
     if not channel:
         return
+
     for event in SCHEDULE:
-        if should_notify(event, now):
-            await channel.send(f"@everyone **{event['name']}** 即將開始！（{ADVANCE_MINUTES} 分鐘後）")
+        # 倒數 10 分鐘
+        if should_notify(event, now, 10):
+            await channel.send(f"@everyone **{event['name']}** 即將開始！（還有 10 分鐘）")
+        # 倒數 5 分鐘
+        if should_notify(event, now, 5):
+            await channel.send(f"@everyone **{event['name']}** 即將開始！（還有 5 分鐘）")
+
     to_remove = []
     for name, next_time in list(dynamic_timers.items()):
-        if now >= next_time - timedelta(minutes=ADVANCE_MINUTES) and now < next_time:
-            key = f"dynamic_{name}_{next_time}"
-            if key not in notified:
-                notified.add(key)
-                await channel.send(f"@everyone **{name}** 即將刷新！（約 {ADVANCE_MINUTES} 分鐘後）")
-                to_remove.append(name)
+        for minutes in [10, 5]:
+            if now >= next_time - timedelta(minutes=minutes) and now < next_time - timedelta(minutes=minutes-1):
+                key = f"dynamic_{name}_{minutes}_{next_time}"
+                if key not in notified:
+                    notified.add(key)
+                    await channel.send(f"@everyone **{name}** 即將刷新！（還有 {minutes} 分鐘）")
+                    if minutes == 5:
+                        to_remove.append(name)
     for name in to_remove:
         dynamic_timers.pop(name, None)
 
