@@ -1,10 +1,11 @@
 import discord
 from discord.ext import tasks, commands
 from datetime import datetime, timedelta
+import os
 
 # ==================== 設定區 ====================
-TOKEN = "MTU2MTAzOTIyMDkwMDg4ODY2Nw.G90kHN.x6UX1otak3yQyts3rkfjX_f66gFTJTkpzTTdAo"
-CHANNEL_ID = 123456789012345678  # 1561090723833716887
+TOKEN = os.getenv("TOKEN")
+CHANNEL_ID = int(os.getenv("CHANNEL_ID", "0"))
 
 ADVANCE_MINUTES = 5
 
