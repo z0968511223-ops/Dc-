@@ -65,13 +65,11 @@ async def check_schedule():
     channel = bot.get_channel(CHANNEL_ID)
     if not channel:
         return
-
     for event in SCHEDULE:
         if should_notify(event, now, 10):
             await channel.send(f"@everyone **{event['name']}** 即將開始！（還有 10 分鐘）")
         if should_notify(event, now, 5):
             await channel.send(f"@everyone **{event['name']}** 即將開始！（還有 5 分鐘）")
-
     to_remove = []
     for name, next_time in list(dynamic_timers.items()):
         for minutes in [10, 5]:
@@ -96,7 +94,6 @@ def build_day_message(target_date, title_prefix):
                 guild_events.append(line)
             else:
                 world_events.append(line)
-
     msg = f"**{title_prefix}大世界活動：**\n"
     msg += "\n".join(world_events) if world_events else f"{title_prefix}無大世界活動"
     msg += f"\n\n**{title_prefix}公會活動：**\n"
@@ -143,3 +140,20 @@ async def status(interaction: discord.Interaction):
 async def cancel(interaction: discord.Interaction, 名稱: str):
     name = 名稱.strip()
     if name in dynamic_timers:
+        dynamic_timers.pop(name)
+        await interaction.response.send_message(f"已取消 **{name}** 的倒數。")
+    else:
+        await interaction.response.send_message(f"找不到 **{name}** 的倒數。", ephemeral=True)
+
+@bot.event
+async def on_ready():
+    print(f"機器人已上線：{bot.user}")
+    try:
+        synced = await bot.tree.sync()
+        print(f"已同步 {len(synced)} 個斜線指令")
+    except Exception as e:
+        print(e)
+    if not check_schedule.is_running():
+        check_schedule.start()
+
+bot.run(TOKEN)
