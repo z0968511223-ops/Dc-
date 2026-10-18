@@ -11,28 +11,19 @@ ADVANCE_MINUTES = 5
 
 # ==================== 固定時間表 ====================
 SCHEDULE = [
-    # 野外 Boss
-    {"name": "野外 Boss 群組1", "times": ["00:15", "09:15", "12:15", "21:15"], "days": None},
-
-    # 世界 Boss
-    {"name": "世界 Boss 亞加拉旭", "times": ["21:00"], "days": None},
-    {"name": "世界 Boss 沙赫加", "times": ["21:00"], "days": None},
-    {"name": "世界 Boss 貝西摩斯", "times": ["21:00"], "days": None},  # 擊殺後隔天再刷，目前先當每天
-    {"name": "世界 Boss 達里恩特", "times": ["21:00"], "days": [2]},  # 週三
-
-    # 巨人塔
-    {"name": "巨人塔 1F", "times": ["21:00"], "days": [0, 3]},
-    {"name": "巨人塔 2F", "times": ["21:00"], "days": [1, 4]},
-    {"name": "巨人塔 3F", "times": ["21:00"], "days": [2, 5]},
-    {"name": "巨人塔 4F", "times": ["21:00"], "days": [0, 3]},
-
-    # 其他
-    {"name": "大氾濫", "times": ["20:00"], "days": None},
-    {"name": "神石戰", "times": ["19:30"], "days": [6], "base_date": datetime(2026, 11, 1), "every_n_days": 14},
-    {"name": "激戰", "times": ["21:00"], "days": [1, 4, 6]},
-
-    # 公會活動
-    {"name": "公會活動集合（複製體/遠征/競技場/證明）", "times": ["22:20"], "days": [6]},
+    {"name": "野外 Boss 群組1", "times": ["00:15", "09:15", "12:15", "21:15"], "days": None, "category": "大世界"},
+    {"name": "世界 Boss 亞加拉旭", "times": ["21:00"], "days": None, "category": "大世界"},
+    {"name": "世界 Boss 沙赫加", "times": ["21:00"], "days": None, "category": "大世界"},
+    {"name": "世界 Boss 貝西摩斯", "times": ["21:00"], "days": None, "category": "大世界"},
+    {"name": "世界 Boss 達里恩特", "times": ["21:00"], "days": [2], "category": "大世界"},
+    {"name": "巨人塔 1F", "times": ["21:00"], "days": [0, 3], "category": "大世界"},
+    {"name": "巨人塔 2F", "times": ["21:00"], "days": [1, 4], "category": "大世界"},
+    {"name": "巨人塔 3F", "times": ["21:00"], "days": [2, 5], "category": "大世界"},
+    {"name": "巨人塔 4F", "times": ["21:00"], "days": [0, 3], "category": "大世界"},
+    {"name": "大氾濫", "times": ["20:00"], "days": None, "category": "大世界"},
+    {"name": "激戰", "times": ["21:00"], "days": [1, 4, 6], "category": "大世界"},
+    {"name": "神石戰", "times": ["19:30"], "days": [6], "base_date": datetime(2026, 11, 1), "every_n_days": 14, "category": "公會"},
+    {"name": "公會活動集合（複製體/遠征/競技場/證明）", "times": ["22:20"], "days": [6], "category": "公會"},
 ]
 
 # ==================== 機器人核心 ====================
@@ -44,13 +35,12 @@ dynamic_timers = {}
 
 def is_event_today(event, now):
     weekday = now.weekday()
-    if event["days"] is not None and weekday not in event["days"]:
+    if event.get("days") is not None and weekday not in event["days"]:
         return False
-
     if "every_n_days" in event:
         base = event.get("base_date", datetime(2026, 9, 16))
         days_diff = (now.date() - base.date()).days
-        if days_diff % event["every_n_days"] != 0:
+        if days_diff < 0 or days_diff % event["every_n_days"] != 0:
             return False
     return True
 
@@ -92,15 +82,26 @@ async def check_schedule():
     for name in to_remove:
         dynamic_timers.pop(name, None)
 
-@bot.tree.command(name="今日", description="查看今天有哪些固定活動")
+@bot.tree.command(name="今日", description="查看今天有哪些活動")
 async def today(interaction: discord.Interaction):
     now = datetime.now()
-    today_events = []
+    world_events = []
+    guild_events = []
+
     for event in SCHEDULE:
         if is_event_today(event, now):
             times = "、".join(event["times"])
-            today_events.append(f"**{event['name']}**：{times}")
-    msg = "**今天的固定活動：**\n" + "\n".join(today_events) if today_events else "今天沒有固定活動。"
+            line = f"{event['name']}：{times}"
+            if event.get("category") == "公會":
+                guild_events.append(line)
+            else:
+                world_events.append(line)
+
+    msg = "**大世界今日活動：**\n"
+    msg += "\n".join(world_events) if world_events else "今日無大世界活動"
+    msg += "\n\n**公會今日活動：**\n"
+    msg += "\n".join(guild_events) if guild_events else "今日無公會活動"
+
     await interaction.response.send_message(msg)
 
 @bot.tree.command(name="擊殺", description="記錄擊殺並開始倒數（分鐘）")
