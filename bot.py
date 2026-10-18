@@ -3,13 +3,10 @@ from discord.ext import tasks, commands
 from datetime import datetime, timedelta
 import os
 
-# ==================== 設定區 ====================
 TOKEN = os.getenv("TOKEN")
 CHANNEL_ID = int(os.getenv("CHANNEL_ID", "0"))
-
 ADVANCE_MINUTES = 5
 
-# ==================== 固定時間表 ====================
 SCHEDULE = [
     {"name": "野外 Boss 群組1", "times": ["00:15", "09:15", "12:15", "21:15"], "days": None, "category": "大世界"},
     {"name": "世界 Boss 亞加拉旭", "times": ["21:00"], "days": None, "category": "大世界"},
@@ -22,36 +19,34 @@ SCHEDULE = [
     {"name": "巨人塔 4F", "times": ["21:00"], "days": [0, 3], "category": "大世界"},
     {"name": "大氾濫", "times": ["20:00"], "days": None, "category": "大世界"},
     {"name": "激戰", "times": ["21:00"], "days": [1, 4, 6], "category": "大世界"},
+    {"name": "次元BOSS", "times": ["21:30"], "days": None, "category": "大世界"},
     {"name": "神石戰", "times": ["19:30"], "days": [6], "base_date": datetime(2026, 11, 1), "every_n_days": 14, "category": "公會"},
     {"name": "公會活動集合（複製體/遠征/競技場/證明）", "times": ["22:20"], "days": [6], "category": "公會"},
 ]
 
-# ==================== 機器人核心 ====================
 intents = discord.Intents.default()
 bot = commands.Bot(command_prefix="!", intents=intents)
-
 notified = set()
 dynamic_timers = {}
 
-def is_event_today(event, now):
-    weekday = now.weekday()
-    if event.get("days") is not None and weekday not in event["days"]:
+def is_event_on_date(event, target_date):
+    weekday = target_date.weekday()
+    days = event.get("days")
+    if days is not None and weekday not in days:
         return False
     if "every_n_days" in event:
         base = event.get("base_date", datetime(2026, 9, 16))
-        days_diff = (now.date() - base.date()).days
-        if days_diff < 0 or days_diff % event["every_n_days"] != 0:
+        days_diff = (target_date.date() - base.date()).days
+        if days_diff < 0 or (days_diff % event["every_n_days"]) != 0:
             return False
     return True
 
 def should_notify(event, now):
-    if not is_event_today(event, now):
+    if not is_event_on_date(event, now):
         return False
     current_time = now.strftime("%H:%M")
     for t in event["times"]:
-        target = datetime.strptime(t, "%H:%M").replace(
-            year=now.year, month=now.month, day=now.day
-        )
+        target = datetime.strptime(t, "%H:%M").replace(year=now.year, month=now.month, day=now.day)
         notify_time = target - timedelta(minutes=ADVANCE_MINUTES)
         if notify_time.strftime("%H:%M") == current_time:
             key = f"{event['name']}_{current_time}_{now.date()}"
@@ -66,11 +61,9 @@ async def check_schedule():
     channel = bot.get_channel(CHANNEL_ID)
     if not channel:
         return
-
     for event in SCHEDULE:
         if should_notify(event, now):
             await channel.send(f"@everyone **{event['name']}** 即將開始！（{ADVANCE_MINUTES} 分鐘後）")
-
     to_remove = []
     for name, next_time in list(dynamic_timers.items()):
         if now >= next_time - timedelta(minutes=ADVANCE_MINUTES) and now < next_time:
@@ -82,14 +75,11 @@ async def check_schedule():
     for name in to_remove:
         dynamic_timers.pop(name, None)
 
-@bot.tree.command(name="今日", description="查看今天有哪些活動")
-async def today(interaction: discord.Interaction):
-    now = datetime.now()
+def build_day_message(target_date, title_prefix):
     world_events = []
     guild_events = []
-
     for event in SCHEDULE:
-        if is_event_today(event, now):
+        if is_event_on_date(event, target_date):
             times = "、".join(event["times"])
             line = f"{event['name']}：{times}"
             if event.get("category") == "公會":
@@ -97,27 +87,33 @@ async def today(interaction: discord.Interaction):
             else:
                 world_events.append(line)
 
-    msg = "**大世界今日活動：**\n"
-    msg += "\n".join(world_events) if world_events else "今日無大世界活動"
-    msg += "\n\n**公會今日活動：**\n"
-    msg += "\n".join(guild_events) if guild_events else "今日無公會活動"
+    msg = f"**{title_prefix}大世界活動：**\n"
+    msg += "\n".join(world_events) if world_events else f"{title_prefix}無大世界活動"
+    msg += f"\n\n**{title_prefix}公會活動：**\n"
+    msg += "\n".join(guild_events) if guild_events else f"{title_prefix}無公會活動"
+    return msg
 
+@bot.tree.command(name="今日", description="查看今天有哪些活動")
+async def today(interaction: discord.Interaction):
+    msg = build_day_message(datetime.now(), "今日")
+    await interaction.response.send_message(msg)
+
+@bot.tree.command(name="明日", description="查看明天有哪些活動")
+async def tomorrow(interaction: discord.Interaction):
+    tomorrow_date = datetime.now() + timedelta(days=1)
+    msg = build_day_message(tomorrow_date, "明日")
     await interaction.response.send_message(msg)
 
 @bot.tree.command(name="擊殺", description="記錄擊殺並開始倒數（分鐘）")
 async def kill(interaction: discord.Interaction, 名稱: str, 分鐘: int):
-    name = 名稱.strip()
     if 分鐘 <= 0:
         await interaction.response.send_message("分鐘數必須大於 0", ephemeral=True)
         return
     next_time = datetime.now() + timedelta(minutes=分鐘)
-    dynamic_timers[name] = next_time
-    hours = 分鐘 // 60
-    mins = 分鐘 % 60
+    dynamic_timers[名稱.strip()] = next_time
+    hours, mins = divmod(分鐘, 60)
     time_str = f"{hours}小時{mins}分鐘" if hours else f"{mins}分鐘"
-    await interaction.response.send_message(
-        f"已記錄 **{name}** 擊殺！\n刷新間隔：{time_str}\n下次時間：{next_time.strftime('%m/%d %H:%M')}"
-    )
+    await interaction.response.send_message(f"已記錄 **{名稱}** 擊殺！\n刷新間隔：{time_str}\n下次時間：{next_time.strftime('%m/%d %H:%M')}")
 
 @bot.tree.command(name="狀態", description="查看目前動態倒數")
 async def status(interaction: discord.Interaction):
@@ -129,8 +125,7 @@ async def status(interaction: discord.Interaction):
     for name, next_time in dynamic_timers.items():
         remaining = next_time - now
         total_mins = int(remaining.total_seconds() // 60)
-        hours = total_mins // 60
-        mins = total_mins % 60
+        hours, mins = divmod(total_mins, 60)
         lines.append(f"**{name}**：還剩 {hours}小時{mins}分鐘（{next_time.strftime('%H:%M')}）")
     await interaction.response.send_message("**目前動態倒數：**\n" + "\n".join(lines))
 
