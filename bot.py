@@ -29,6 +29,7 @@ SCHEDULE = [
 intents = discord.Intents.default()
 bot = commands.Bot(command_prefix="!", intents=intents)
 notified = set()
+daily_sent = set()
 dynamic_timers = {}
 
 def now_tw():
@@ -72,38 +73,6 @@ def should_notify(event, now, minutes_before):
                 return True
     return False
 
-@tasks.loop(minutes=1)
-async def check_schedule():
-    now = now_tw()
-    print(f"[檢查] 台灣時間：{now.strftime('%Y-%m-%d %H:%M:%S')}", flush=True)
-    channels = get_channels()
-    if not channels:
-        print("[錯誤] 找不到任何頻道", flush=True)
-        return
-    for event in SCHEDULE:
-        if should_notify(event, now, 10):
-            msg = f"@everyone **{event['name']}** 即將開始！（還有 10 分鐘）"
-            for ch in channels:
-                await ch.send(msg)
-        if should_notify(event, now, 5):
-            msg = f"@everyone **{event['name']}** 即將開始！（還有 5 分鐘）"
-            for ch in channels:
-                await ch.send(msg)
-    to_remove = []
-    for name, next_time in list(dynamic_timers.items()):
-        for minutes in [10, 5]:
-            if now >= next_time - timedelta(minutes=minutes) and now < next_time - timedelta(minutes=minutes-1):
-                key = f"dynamic_{name}_{minutes}_{next_time}"
-                if key not in notified:
-                    notified.add(key)
-                    msg = f"@everyone **{name}** 即將刷新！（還有 {minutes} 分鐘）"
-                    for ch in channels:
-                        await ch.send(msg)
-                    if minutes == 5:
-                        to_remove.append(name)
-    for name in to_remove:
-        dynamic_timers.pop(name, None)
-
 def build_day_message(target_date, title_prefix):
     world_events = []
     guild_events = []
@@ -120,6 +89,49 @@ def build_day_message(target_date, title_prefix):
     msg += f"\n\n**{title_prefix}公會活動：**\n"
     msg += "\n".join(guild_events) if guild_events else f"{title_prefix}無公會活動"
     return msg
+
+@tasks.loop(minutes=1)
+async def check_schedule():
+    now = now_tw()
+    print(f"[檢查] 台灣時間：{now.strftime('%Y-%m-%d %H:%M:%S')}", flush=True)
+    channels = get_channels()
+    if not channels:
+        print("[錯誤] 找不到任何頻道", flush=True)
+        return
+
+    # 每天 00:00 發送今日活動表
+    if now.strftime("%H:%M") == "00:00":
+        key = f"daily_{now.date()}"
+        if key not in daily_sent:
+            daily_sent.add(key)
+            msg = f"@everyone\n{build_day_message(now, '今日')}"
+            for ch in channels:
+                await ch.send(msg)
+
+    for event in SCHEDULE:
+        if should_notify(event, now, 10):
+            msg = f"@everyone **{event['name']}** 即將開始！（還有 10 分鐘）"
+            for ch in channels:
+                await ch.send(msg)
+        if should_notify(event, now, 5):
+            msg = f"@everyone **{event['name']}** 即將開始！（還有 5 分鐘）"
+            for ch in channels:
+                await ch.send(msg)
+
+    to_remove = []
+    for name, next_time in list(dynamic_timers.items()):
+        for minutes in [10, 5]:
+            if now >= next_time - timedelta(minutes=minutes) and now < next_time - timedelta(minutes=minutes-1):
+                key = f"dynamic_{name}_{minutes}_{next_time}"
+                if key not in notified:
+                    notified.add(key)
+                    msg = f"@everyone **{name}** 即將刷新！（還有 {minutes} 分鐘）"
+                    for ch in channels:
+                        await ch.send(msg)
+                    if minutes == 5:
+                        to_remove.append(name)
+    for name in to_remove:
+        dynamic_timers.pop(name, None)
 
 @bot.tree.command(name="今日", description="查看今天有哪些活動")
 async def today(interaction: discord.Interaction):
