@@ -62,13 +62,17 @@ def should_notify(event, now, minutes_before):
 @tasks.loop(minutes=1)
 async def check_schedule():
     now = now_tw()
+    print(f"[檢查] 台灣時間：{now.strftime('%Y-%m-%d %H:%M:%S')}")  # 偵錯用
     channel = bot.get_channel(CHANNEL_ID)
     if not channel:
+        print(f"[錯誤] 找不到頻道 {CHANNEL_ID}")
         return
     for event in SCHEDULE:
         if should_notify(event, now, 10):
+            print(f"[通知] {event['name']} 10分鐘")
             await channel.send(f"@everyone **{event['name']}** 即將開始！（還有 10 分鐘）")
         if should_notify(event, now, 5):
+            print(f"[通知] {event['name']} 5分鐘")
             await channel.send(f"@everyone **{event['name']}** 即將開始！（還有 5 分鐘）")
     to_remove = []
     for name, next_time in list(dynamic_timers.items()):
