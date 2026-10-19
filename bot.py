@@ -62,17 +62,17 @@ def should_notify(event, now, minutes_before):
 @tasks.loop(minutes=1)
 async def check_schedule():
     now = now_tw()
-    print(f"[檢查] 台灣時間：{now.strftime('%Y-%m-%d %H:%M:%S')}")  # 偵錯用
+    print(f"[檢查] 台灣時間：{now.strftime('%Y-%m-%d %H:%M:%S')}", flush=True)
     channel = bot.get_channel(CHANNEL_ID)
     if not channel:
-        print(f"[錯誤] 找不到頻道 {CHANNEL_ID}")
+        print(f"[錯誤] 找不到頻道 {CHANNEL_ID}", flush=True)
         return
     for event in SCHEDULE:
         if should_notify(event, now, 10):
-            print(f"[通知] {event['name']} 10分鐘")
+            print(f"[通知] {event['name']} 10分鐘", flush=True)
             await channel.send(f"@everyone **{event['name']}** 即將開始！（還有 10 分鐘）")
         if should_notify(event, now, 5):
-            print(f"[通知] {event['name']} 5分鐘")
+            print(f"[通知] {event['name']} 5分鐘", flush=True)
             await channel.send(f"@everyone **{event['name']}** 即將開始！（還有 5 分鐘）")
     to_remove = []
     for name, next_time in list(dynamic_timers.items()):
@@ -151,12 +151,12 @@ async def cancel(interaction: discord.Interaction, 名稱: str):
 
 @bot.event
 async def on_ready():
-    print(f"機器人已上線：{bot.user}")
+    print(f"機器人已上線：{bot.user}", flush=True)
     try:
         synced = await bot.tree.sync()
-        print(f"已同步 {len(synced)} 個斜線指令")
+        print(f"已同步 {len(synced)} 個斜線指令", flush=True)
     except Exception as e:
-        print(e)
+        print(e, flush=True)
     if not check_schedule.is_running():
         check_schedule.start()
 
