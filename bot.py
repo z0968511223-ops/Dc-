@@ -6,7 +6,7 @@ import os
 
 TOKEN = os.getenv("TOKEN")
 CHANNEL_ID = int(os.getenv("CHANNEL_ID", "0"))
-CHANNEL_ID_2 = int(os.getenv("CHANNEL_ID_2", "0"))  # 第二個頻道
+CHANNEL_ID_2 = int(os.getenv("CHANNEL_ID_2", "0"))
 TZ = ZoneInfo("Asia/Taipei")
 
 SCHEDULE = [
@@ -21,7 +21,7 @@ SCHEDULE = [
     {"name": "巨人塔 4F", "times": ["21:00"], "days": [0, 3], "category": "大世界"},
     {"name": "大氾濫", "times": ["20:00"], "days": None, "category": "大世界"},
     {"name": "激戰", "times": ["21:00"], "days": [1, 4, 6], "category": "大世界"},
-    {"name": "次元BOSS", "times": ["21:30"], "days": None, "category": "大世界"},
+    {"name": "次元BOSS", "times": ["20:30"], "days": None, "category": "大世界"},
     {"name": "神石戰", "times": ["19:30"], "days": [6], "base_date": datetime(2026, 11, 1, tzinfo=TZ), "every_n_days": 14, "category": "公會"},
     {"name": "公會活動集合（複製體/遠征/競技場/證明）", "times": ["22:20"], "days": [6], "category": "公會"},
 ]
