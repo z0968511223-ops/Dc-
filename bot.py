@@ -6,6 +6,7 @@ import os
 
 TOKEN = os.getenv("TOKEN")
 CHANNEL_ID = int(os.getenv("CHANNEL_ID", "0"))
+CHANNEL_ID_2 = int(os.getenv("CHANNEL_ID_2", "0"))  # 第二個頻道
 TZ = ZoneInfo("Asia/Taipei")
 
 SCHEDULE = [
@@ -32,6 +33,18 @@ dynamic_timers = {}
 
 def now_tw():
     return datetime.now(TZ)
+
+def get_channels():
+    channels = []
+    if CHANNEL_ID:
+        ch = bot.get_channel(CHANNEL_ID)
+        if ch:
+            channels.append(ch)
+    if CHANNEL_ID_2:
+        ch2 = bot.get_channel(CHANNEL_ID_2)
+        if ch2:
+            channels.append(ch2)
+    return channels
 
 def is_event_on_date(event, target_date):
     weekday = target_date.weekday()
@@ -63,17 +76,19 @@ def should_notify(event, now, minutes_before):
 async def check_schedule():
     now = now_tw()
     print(f"[檢查] 台灣時間：{now.strftime('%Y-%m-%d %H:%M:%S')}", flush=True)
-    channel = bot.get_channel(CHANNEL_ID)
-    if not channel:
-        print(f"[錯誤] 找不到頻道 {CHANNEL_ID}", flush=True)
+    channels = get_channels()
+    if not channels:
+        print("[錯誤] 找不到任何頻道", flush=True)
         return
     for event in SCHEDULE:
         if should_notify(event, now, 10):
-            print(f"[通知] {event['name']} 10分鐘", flush=True)
-            await channel.send(f"@everyone **{event['name']}** 即將開始！（還有 10 分鐘）")
+            msg = f"@everyone **{event['name']}** 即將開始！（還有 10 分鐘）"
+            for ch in channels:
+                await ch.send(msg)
         if should_notify(event, now, 5):
-            print(f"[通知] {event['name']} 5分鐘", flush=True)
-            await channel.send(f"@everyone **{event['name']}** 即將開始！（還有 5 分鐘）")
+            msg = f"@everyone **{event['name']}** 即將開始！（還有 5 分鐘）"
+            for ch in channels:
+                await ch.send(msg)
     to_remove = []
     for name, next_time in list(dynamic_timers.items()):
         for minutes in [10, 5]:
@@ -81,7 +96,9 @@ async def check_schedule():
                 key = f"dynamic_{name}_{minutes}_{next_time}"
                 if key not in notified:
                     notified.add(key)
-                    await channel.send(f"@everyone **{name}** 即將刷新！（還有 {minutes} 分鐘）")
+                    msg = f"@everyone **{name}** 即將刷新！（還有 {minutes} 分鐘）"
+                    for ch in channels:
+                        await ch.send(msg)
                     if minutes == 5:
                         to_remove.append(name)
     for name in to_remove:
