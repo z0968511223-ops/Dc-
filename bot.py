@@ -91,49 +91,36 @@ async def check_schedule():
             for ch in channels:
                 await ch.send(msg)
 
-    notify_10 = []
-    notify_5 = []
-    notify_2 = []
-
     for event in SCHEDULE:
         current_time = now.strftime("%H:%M")
         for t in event["times"]:
             if not is_event_on_date(event, now):
                 continue
             target = datetime.strptime(t, "%H:%M").replace(year=now.year, month=now.month, day=now.day, tzinfo=TZ)
-            for minutes, lst in [(10, notify_10), (5, notify_5), (2, notify_2)]:
+            for minutes in [10, 5, 2]:
                 notify_time = target - timedelta(minutes=minutes)
                 if notify_time.strftime("%H:%M") == current_time:
                     key = f"{event['name']}_{minutes}_{current_time}_{now.date()}"
                     if key not in notified:
                         notified.add(key)
-                        lst.append(event['name'])
+                        msg = f"@everyone **{event['name']}** 即將開始！（還有 {minutes} 分鐘）"
+                        for ch in channels:
+                            await ch.send(msg)
 
     to_remove = []
     for name, next_time in list(dynamic_timers.items()):
-        for minutes, lst in [(10, notify_10), (5, notify_5), (2, notify_2)]:
+        for minutes in [10, 5, 2]:
             if now >= next_time - timedelta(minutes=minutes) and now < next_time - timedelta(minutes=minutes-1):
                 key = f"dynamic_{name}_{minutes}_{next_time}"
                 if key not in notified:
                     notified.add(key)
-                    lst.append(name)
+                    msg = f"@everyone **{name}** 即將刷新！（還有 {minutes} 分鐘）"
+                    for ch in channels:
+                        await ch.send(msg)
                     if minutes == 2:
                         to_remove.append(name)
     for name in to_remove:
         dynamic_timers.pop(name, None)
-
-    if notify_10:
-        msg = f"@everyone 即將開始（還有 10 分鐘）：\n" + "\n".join(f"• {n}" for n in notify_10)
-        for ch in channels:
-            await ch.send(msg)
-    if notify_5:
-        msg = f"@everyone 即將開始（還有 5 分鐘）：\n" + "\n".join(f"• {n}" for n in notify_5)
-        for ch in channels:
-            await ch.send(msg)
-    if notify_2:
-        msg = f"@everyone 即將開始（還有 2 分鐘）：\n" + "\n".join(f"• {n}" for n in notify_2)
-        for ch in channels:
-            await ch.send(msg)
 
 @bot.tree.command(name="今日", description="查看今天有哪些活動")
 async def today(interaction: discord.Interaction):
