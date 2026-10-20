@@ -39,12 +39,10 @@ def get_channels():
     channels = []
     if CHANNEL_ID:
         ch = bot.get_channel(CHANNEL_ID)
-        if ch:
-            channels.append(ch)
+        if ch: channels.append(ch)
     if CHANNEL_ID_2:
         ch2 = bot.get_channel(CHANNEL_ID_2)
-        if ch2:
-            channels.append(ch2)
+        if ch2: channels.append(ch2)
     return channels
 
 def is_event_on_date(event, target_date):
@@ -58,20 +56,6 @@ def is_event_on_date(event, target_date):
         if days_diff < 0 or (days_diff % event["every_n_days"]) != 0:
             return False
     return True
-
-def should_notify(event, now, minutes_before):
-    if not is_event_on_date(event, now):
-        return False
-    current_time = now.strftime("%H:%M")
-    for t in event["times"]:
-        target = datetime.strptime(t, "%H:%M").replace(year=now.year, month=now.month, day=now.day, tzinfo=TZ)
-        notify_time = target - timedelta(minutes=minutes_before)
-        if notify_time.strftime("%H:%M") == current_time:
-            key = f"{event['name']}_{minutes_before}_{current_time}_{now.date()}"
-            if key not in notified:
-                notified.add(key)
-                return True
-    return False
 
 def build_day_message(target_date, title_prefix):
     world_events = []
@@ -99,7 +83,6 @@ async def check_schedule():
         print("[錯誤] 找不到任何頻道", flush=True)
         return
 
-    # 每天 00:00 發送今日活動表
     if now.strftime("%H:%M") == "00:00":
         key = f"daily_{now.date()}"
         if key not in daily_sent:
@@ -108,30 +91,49 @@ async def check_schedule():
             for ch in channels:
                 await ch.send(msg)
 
+    notify_10 = []
+    notify_5 = []
+    notify_2 = []
+
     for event in SCHEDULE:
-        if should_notify(event, now, 10):
-            msg = f"@everyone **{event['name']}** 即將開始！（還有 10 分鐘）"
-            for ch in channels:
-                await ch.send(msg)
-        if should_notify(event, now, 5):
-            msg = f"@everyone **{event['name']}** 即將開始！（還有 5 分鐘）"
-            for ch in channels:
-                await ch.send(msg)
+        current_time = now.strftime("%H:%M")
+        for t in event["times"]:
+            if not is_event_on_date(event, now):
+                continue
+            target = datetime.strptime(t, "%H:%M").replace(year=now.year, month=now.month, day=now.day, tzinfo=TZ)
+            for minutes, lst in [(10, notify_10), (5, notify_5), (2, notify_2)]:
+                notify_time = target - timedelta(minutes=minutes)
+                if notify_time.strftime("%H:%M") == current_time:
+                    key = f"{event['name']}_{minutes}_{current_time}_{now.date()}"
+                    if key not in notified:
+                        notified.add(key)
+                        lst.append(event['name'])
 
     to_remove = []
     for name, next_time in list(dynamic_timers.items()):
-        for minutes in [10, 5]:
+        for minutes, lst in [(10, notify_10), (5, notify_5), (2, notify_2)]:
             if now >= next_time - timedelta(minutes=minutes) and now < next_time - timedelta(minutes=minutes-1):
                 key = f"dynamic_{name}_{minutes}_{next_time}"
                 if key not in notified:
                     notified.add(key)
-                    msg = f"@everyone **{name}** 即將刷新！（還有 {minutes} 分鐘）"
-                    for ch in channels:
-                        await ch.send(msg)
-                    if minutes == 5:
+                    lst.append(name)
+                    if minutes == 2:
                         to_remove.append(name)
     for name in to_remove:
         dynamic_timers.pop(name, None)
+
+    if notify_10:
+        msg = f"@everyone 即將開始（還有 10 分鐘）：\n" + "\n".join(f"• {n}" for n in notify_10)
+        for ch in channels:
+            await ch.send(msg)
+    if notify_5:
+        msg = f"@everyone 即將開始（還有 5 分鐘）：\n" + "\n".join(f"• {n}" for n in notify_5)
+        for ch in channels:
+            await ch.send(msg)
+    if notify_2:
+        msg = f"@everyone 即將開始（還有 2 分鐘）：\n" + "\n".join(f"• {n}" for n in notify_2)
+        for ch in channels:
+            await ch.send(msg)
 
 @bot.tree.command(name="今日", description="查看今天有哪些活動")
 async def today(interaction: discord.Interaction):
@@ -144,16 +146,22 @@ async def tomorrow(interaction: discord.Interaction):
     msg = build_day_message(tomorrow_date, "明日")
     await interaction.response.send_message(msg)
 
-@bot.tree.command(name="擊殺", description="記錄擊殺並開始倒數（分鐘）")
+@bot.tree.command(name="擊殺", description="記錄擊殺（會自動加5分鐘）")
 async def kill(interaction: discord.Interaction, 名稱: str, 分鐘: int):
     if 分鐘 <= 0:
         await interaction.response.send_message("分鐘數必須大於 0", ephemeral=True)
         return
-    next_time = now_tw() + timedelta(minutes=分鐘)
+    total_minutes = 分鐘 + 5
+    next_time = now_tw() + timedelta(minutes=total_minutes)
     dynamic_timers[名稱.strip()] = next_time
-    hours, mins = divmod(分鐘, 60)
+    hours, mins = divmod(total_minutes, 60)
     time_str = f"{hours}小時{mins}分鐘" if hours else f"{mins}分鐘"
-    await interaction.response.send_message(f"已記錄 **{名稱}** 擊殺！\n刷新間隔：{time_str}\n下次時間：{next_time.strftime('%m/%d %H:%M')}")
+    await interaction.response.send_message(
+        f"已記錄 **{名稱}** 擊殺！\n"
+        f"原輸入：{分鐘} 分鐘 + 5 分鐘（擊殺時間）\n"
+        f"實際倒數：{time_str}\n"
+        f"下次時間：{next_time.strftime('%m/%d %H:%M')}"
+    )
 
 @bot.tree.command(name="狀態", description="查看目前動態倒數")
 async def status(interaction: discord.Interaction):
