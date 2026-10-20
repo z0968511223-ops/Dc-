@@ -7,6 +7,7 @@ import os
 TOKEN = os.getenv("TOKEN")
 CHANNEL_ID = int(os.getenv("CHANNEL_ID", "0"))
 CHANNEL_ID_2 = int(os.getenv("CHANNEL_ID_2", "0"))
+ROLE_ID = int(os.getenv("ROLE_ID", "0"))
 TZ = ZoneInfo("Asia/Taipei")
 
 SCHEDULE = [
@@ -44,6 +45,11 @@ def get_channels():
         ch2 = bot.get_channel(CHANNEL_ID_2)
         if ch2: channels.append(ch2)
     return channels
+
+def get_mention():
+    if ROLE_ID:
+        return f"<@&{ROLE_ID}>"
+    return "@everyone"
 
 def is_event_on_date(event, target_date):
     weekday = target_date.weekday()
@@ -83,11 +89,13 @@ async def check_schedule():
         print("[錯誤] 找不到任何頻道", flush=True)
         return
 
+    mention = get_mention()
+
     if now.strftime("%H:%M") == "00:00":
         key = f"daily_{now.date()}"
         if key not in daily_sent:
             daily_sent.add(key)
-            msg = f"@everyone\n{build_day_message(now, '今日')}"
+            msg = f"{mention}\n{build_day_message(now, '今日')}"
             for ch in channels:
                 await ch.send(msg)
 
@@ -103,7 +111,7 @@ async def check_schedule():
                     key = f"{event['name']}_{minutes}_{current_time}_{now.date()}"
                     if key not in notified:
                         notified.add(key)
-                        msg = f"@everyone **{event['name']}** 即將開始！（還有 {minutes} 分鐘）"
+                        msg = f"{mention} **{event['name']}** 即將開始！（還有 {minutes} 分鐘）"
                         for ch in channels:
                             await ch.send(msg)
 
@@ -114,7 +122,7 @@ async def check_schedule():
                 key = f"dynamic_{name}_{minutes}_{next_time}"
                 if key not in notified:
                     notified.add(key)
-                    msg = f"@everyone **{name}** 即將刷新！（還有 {minutes} 分鐘）"
+                    msg = f"{mention} **{name}** 即將刷新！（還有 {minutes} 分鐘）"
                     for ch in channels:
                         await ch.send(msg)
                     if minutes == 2:
