@@ -150,20 +150,17 @@ async def tomorrow(interaction: discord.Interaction):
     msg = build_day_message(tomorrow_date, "明日")
     await interaction.response.send_message(msg)
 
-@bot.tree.command(name="擊殺", description="記錄擊殺（會自動加5分鐘）")
+@bot.tree.command(name="擊殺", description="記錄擊殺並開始倒數")
 async def kill(interaction: discord.Interaction, 名稱: str, 分鐘: int):
     if 分鐘 <= 0:
         await interaction.response.send_message("分鐘數必須大於 0", ephemeral=True)
         return
-    total_minutes = 分鐘 + 5
-    next_time = now_tw() + timedelta(minutes=total_minutes)
+    next_time = now_tw() + timedelta(minutes=分鐘)
     dynamic_timers[名稱.strip()] = next_time
-    hours, mins = divmod(total_minutes, 60)
+    hours, mins = divmod(分鐘, 60)
     time_str = f"{hours}小時{mins}分鐘" if hours else f"{mins}分鐘"
     await interaction.response.send_message(
-        f"已記錄 **{名稱}** 擊殺！\n"
-        f"原輸入：{分鐘} 分鐘 + 5 分鐘\n"
-        f"實際倒數：{time_str}\n"
+        f"**{名稱}** 開始倒數 {time_str}\n"
         f"下次時間：{next_time.strftime('%m/%d %H:%M')}"
     )
 
