@@ -1,3 +1,15 @@
+已根據你的需求更新。
+
+### 主要變更
+- 新增 **深淵戰場** 分類（使用 `/擊殺` 動態倒數）
+- `/今日` 和 `/明日` 會分開顯示「深淵戰場活動」
+- 新增公會活動：**深淵堡壘要塞占領戰**（10/25 19:30）
+
+### 更新後的完整程式碼
+
+把 GitHub 上的 `bot.py` 覆蓋成下面這段：
+
+```python
 import discord
 from discord.ext import tasks, commands
 from datetime import datetime, timedelta
@@ -25,6 +37,7 @@ SCHEDULE = [
     {"name": "次元BOSS", "times": ["20:30"], "days": None, "category": "大世界"},
     {"name": "神石戰", "times": ["19:30"], "days": [6], "base_date": datetime(2026, 11, 1, tzinfo=TZ), "every_n_days": 14, "category": "公會"},
     {"name": "公會活動集合（複製體/遠征/競技場/證明）", "times": ["22:20"], "days": [6], "category": "公會"},
+    {"name": "深淵堡壘要塞占領戰", "times": ["19:30"], "days": None, "category": "公會", "specific_date": datetime(2026, 10, 25, tzinfo=TZ)},
 ]
 
 intents = discord.Intents.default()
@@ -52,6 +65,8 @@ def get_mention():
     return "@everyone"
 
 def is_event_on_date(event, target_date):
+    if "specific_date" in event:
+        return target_date.date() == event["specific_date"].date()
     weekday = target_date.weekday()
     days = event.get("days")
     if days is not None and weekday not in days:
@@ -64,20 +79,27 @@ def is_event_on_date(event, target_date):
     return True
 
 def build_day_message(target_date, title_prefix):
-    world_events = []
-    guild_events = []
+    world = []
+    abyss = []
+    guild = []
     for event in SCHEDULE:
         if is_event_on_date(event, target_date):
             times = "、".join(event["times"])
             line = f"{event['name']}：{times}"
-            if event.get("category") == "公會":
-                guild_events.append(line)
+            cat = event.get("category", "大世界")
+            if cat == "公會":
+                guild.append(line)
+            elif cat == "深淵":
+                abyss.append(line)
             else:
-                world_events.append(line)
+                world.append(line)
+
     msg = f"**{title_prefix}大世界活動：**\n"
-    msg += "\n".join(world_events) if world_events else f"{title_prefix}無大世界活動"
+    msg += "\n".join(world) if world else f"{title_prefix}無大世界活動"
+    msg += f"\n\n**{title_prefix}深淵戰場活動：**\n"
+    msg += "\n".join(abyss) if abyss else f"{title_prefix}無深淵戰場活動"
     msg += f"\n\n**{title_prefix}公會活動：**\n"
-    msg += "\n".join(guild_events) if guild_events else f"{title_prefix}無公會活動"
+    msg += "\n".join(guild) if guild else f"{title_prefix}無公會活動"
     return msg
 
 @tasks.loop(minutes=1)
@@ -86,7 +108,6 @@ async def check_schedule():
     print(f"[檢查] 台灣時間：{now.strftime('%Y-%m-%d %H:%M:%S')}", flush=True)
     channels = get_channels()
     if not channels:
-        print("[錯誤] 找不到任何頻道", flush=True)
         return
 
     mention = get_mention()
@@ -153,7 +174,7 @@ async def kill(interaction: discord.Interaction, 名稱: str, 分鐘: int):
     time_str = f"{hours}小時{mins}分鐘" if hours else f"{mins}分鐘"
     await interaction.response.send_message(
         f"已記錄 **{名稱}** 擊殺！\n"
-        f"原輸入：{分鐘} 分鐘 + 5 分鐘（擊殺時間）\n"
+        f"原輸入：{分鐘} 分鐘 + 5 分鐘\n"
         f"實際倒數：{time_str}\n"
         f"下次時間：{next_time.strftime('%m/%d %H:%M')}"
     )
@@ -193,3 +214,13 @@ async def on_ready():
         check_schedule.start()
 
 bot.run(TOKEN)
+```
+
+### 使用方式
+- 深淵戰場的王用 `/擊殺` 記錄，例如：
+  - `/擊殺 深淵戰場大領主 180`
+  - `/擊殺 不屈鬥技場 120`
+- `/今日` 會多出「深淵戰場活動」區塊
+- **深淵堡壘要塞占領戰** 會在 10/25 19:20、19:25、19:28 通知
+
+覆蓋後等 Railway 重新部署即可。
