@@ -1,16 +1,4 @@
-已根據你的需求更新。
-
-### 主要變更
-- 新增 **深淵戰場** 分類（使用 `/擊殺` 動態倒數）
-- `/今日` 和 `/明日` 會分開顯示「深淵戰場活動」
-- 新增公會活動：**深淵堡壘要塞占領戰**（10/25 19:30）
-
-### 更新後的完整程式碼
-
-把 GitHub 上的 `bot.py` 覆蓋成下面這段：
-
-```python
-import discord
+Pythonimport discord
 from discord.ext import tasks, commands
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
@@ -214,13 +202,3 @@ async def on_ready():
         check_schedule.start()
 
 bot.run(TOKEN)
-```
-
-### 使用方式
-- 深淵戰場的王用 `/擊殺` 記錄，例如：
-  - `/擊殺 深淵戰場大領主 180`
-  - `/擊殺 不屈鬥技場 120`
-- `/今日` 會多出「深淵戰場活動」區塊
-- **深淵堡壘要塞占領戰** 會在 10/25 19:20、19:25、19:28 通知
-
-覆蓋後等 Railway 重新部署即可。
